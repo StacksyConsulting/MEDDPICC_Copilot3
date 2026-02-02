@@ -42,13 +42,9 @@ const MEDDPICCCopilot = () => {
   const [useLiveMode, setUseLiveMode] = useState(true); // Toggle between demo and live
   const [isListening, setIsListening] = useState(false);
   const [askedQuestions, setAskedQuestions] = useState([]); // Track asked questions
-  const [currentSpeaker, setCurrentSpeaker] = useState(1); // Track current speaker number
-  const [speakerColors] = useState(['bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-orange-500']); // Colors for up to 4 speakers
   const transcriptEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const transcriptCountRef = useRef(0);
-  const lastSpeechTimeRef = useRef(Date.now());
-  const silenceThresholdMs = 2000; // 2 seconds of silence = new speaker
 
   // Scroll to bottom of transcript
   useEffect(() => {
@@ -72,9 +68,8 @@ const MEDDPICCCopilot = () => {
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    let activeSpeaker = 1; // Start with Speaker 1
-    let lastSpeechTime = Date.now();
-    let lastSpeaker = 1; // Track the last speaker to alternate properly
+    let currentTranscriptText = '';
+    let speaker = 'prospect'; // Default to prospect, can be toggled
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -94,28 +89,10 @@ const MEDDPICCCopilot = () => {
         }
       }
 
-      // Detect speaker change based on silence gap
-      const currentTime = Date.now();
-      const timeSinceLastSpeech = currentTime - lastSpeechTime;
-      
-      if (timeSinceLastSpeech > silenceThresholdMs && finalTranscript) {
-        // Silence detected - switch to the other speaker
-        // If last speaker was 1, switch to 2, and vice versa
-        activeSpeaker = lastSpeaker === 1 ? 2 : 1;
-        lastSpeaker = activeSpeaker;
-        setCurrentSpeaker(activeSpeaker);
-      } else if (finalTranscript) {
-        // No significant silence, same speaker continuing
-        activeSpeaker = lastSpeaker;
-      }
-
       // When we get a final result, add it to transcript
       if (finalTranscript) {
-        lastSpeechTime = currentTime;
-        lastSpeechTimeRef.current = currentTime;
-        
         const newEntry = {
-          speaker: `Speaker ${activeSpeaker}`,
+          speaker: speaker,
           text: finalTranscript.trim(),
           timestamp: Date.now()
         };
@@ -252,9 +229,7 @@ const MEDDPICCCopilot = () => {
     setIntentScore(null);
     setError(null);
     setAskedQuestions([]); // Reset asked questions
-    setCurrentSpeaker(1); // Reset to Speaker 1
     transcriptCountRef.current = 0;
-    lastSpeechTimeRef.current = Date.now();
   };
 
   const endCall = () => {
@@ -396,22 +371,16 @@ const MEDDPICCCopilot = () => {
 
           {/* Live Status */}
           {isCallActive && (
-            <div className="mt-4 flex items-center gap-3 flex-wrap">
+            <div className="mt-4 flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                 <span className="text-sm font-bold">{useLiveMode ? 'LIVE - Listening' : 'DEMO MODE'}</span>
               </div>
               {isListening && useLiveMode && (
-                <>
-                  <div className="flex items-center gap-2 text-green-300">
-                    <Mic className="w-4 h-4 animate-pulse" />
-                    <span className="text-xs font-medium">Microphone Active</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${speakerColors[(currentSpeaker - 1) % speakerColors.length]}`} />
-                    <span className="text-xs font-medium">Current: Speaker {currentSpeaker}</span>
-                  </div>
-                </>
+                <div className="flex items-center gap-2 text-green-300">
+                  <Mic className="w-4 h-4 animate-pulse" />
+                  <span className="text-xs font-medium">Microphone Active</span>
+                </div>
               )}
               {isProcessing && (
                 <div className="flex items-center gap-2 text-blue-300">
@@ -487,26 +456,20 @@ const MEDDPICCCopilot = () => {
                   </h2>
                 </div>
                 <div className="p-4 h-96 overflow-y-auto space-y-3">
-                  {transcript.map((entry, idx) => {
-                    // Extract speaker number (e.g., "Speaker 1" -> 1)
-                    const speakerNum = entry.speaker.includes('Speaker') 
-                      ? parseInt(entry.speaker.split(' ')[1]) || 1
-                      : 1;
-                    
-                    // Assign color based on speaker number
-                    const colorClass = speakerColors[(speakerNum - 1) % speakerColors.length];
-                    
-                    return (
-                      <div key={idx} className="flex gap-3 justify-start">
-                        <div className={`max-w-[80%] ${colorClass} text-white px-4 py-3 rounded-lg shadow-md`}>
-                          <div className="text-xs font-bold mb-1 opacity-90">
-                            {entry.speaker.toUpperCase()}
-                          </div>
-                          <p className="text-sm leading-relaxed">{entry.text}</p>
+                  {transcript.map((entry, idx) => (
+                    <div key={idx} className={`flex gap-3 ${entry.speaker === 'rep' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[80%] ${
+                        entry.speaker === 'rep' 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-slate-100 text-slate-900'
+                      } px-4 py-3 rounded-lg`}>
+                        <div className="text-xs font-bold mb-1 opacity-75">
+                          {entry.speaker === 'rep' ? 'YOU' : 'PROSPECT'}
                         </div>
+                        <p className="text-sm leading-relaxed">{entry.text}</p>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                   <div ref={transcriptEndRef} />
                 </div>
               </div>
