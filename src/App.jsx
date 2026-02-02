@@ -41,9 +41,14 @@ const MEDDPICCCopilot = () => {
   const [simulationIndex, setSimulationIndex] = useState(0);
   const [useLiveMode, setUseLiveMode] = useState(true); // Toggle between demo and live
   const [isListening, setIsListening] = useState(false);
+  const [askedQuestions, setAskedQuestions] = useState([]); // Track asked questions
+  const [currentSpeaker, setCurrentSpeaker] = useState(1); // Track current speaker number
+  const [speakerColors] = useState(['bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-orange-500']); // Colors for up to 4 speakers
   const transcriptEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const transcriptCountRef = useRef(0);
+  const lastSpeechTimeRef = useRef(Date.now());
+  const silenceThresholdMs = 2000; // 2 seconds of silence = new speaker
 
   // Scroll to bottom of transcript
   useEffect(() => {
@@ -67,8 +72,8 @@ const MEDDPICCCopilot = () => {
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    let currentTranscriptText = '';
-    let speaker = 'prospect'; // Default to prospect, can be toggled
+    let activeSpeaker = 1; // Start with Speaker 1
+    let lastSpeechTime = Date.now();
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -88,10 +93,23 @@ const MEDDPICCCopilot = () => {
         }
       }
 
+      // Detect speaker change based on silence gap
+      const currentTime = Date.now();
+      const timeSinceLastSpeech = currentTime - lastSpeechTime;
+      
+      if (timeSinceLastSpeech > silenceThresholdMs && finalTranscript) {
+        // Silence detected - likely a different speaker
+        activeSpeaker = activeSpeaker >= 4 ? 1 : activeSpeaker + 1;
+        setCurrentSpeaker(activeSpeaker);
+      }
+
       // When we get a final result, add it to transcript
       if (finalTranscript) {
+        lastSpeechTime = currentTime;
+        lastSpeechTimeRef.current = currentTime;
+        
         const newEntry = {
-          speaker: speaker,
+          speaker: `Speaker ${activeSpeaker}`,
           text: finalTranscript.trim(),
           timestamp: Date.now()
         };
@@ -202,7 +220,13 @@ const MEDDPICCCopilot = () => {
       const result = await response.json();
 
       setMeddpiccState(result.meddpicc);
-      setSuggestedQuestions(result.suggested_questions || []);
+      
+      // Filter out questions that have been asked, then cap at 5
+      const newQuestions = (result.suggested_questions || [])
+        .filter(q => !askedQuestions.includes(q.question))
+        .slice(0, 5);
+      
+      setSuggestedQuestions(newQuestions);
       setIntentScore(result.intent_confidence);
 
     } catch (error) {
@@ -221,7 +245,10 @@ const MEDDPICCCopilot = () => {
     setSuggestedQuestions([]);
     setIntentScore(null);
     setError(null);
+    setAskedQuestions([]); // Reset asked questions
+    setCurrentSpeaker(1); // Reset to Speaker 1
     transcriptCountRef.current = 0;
+    lastSpeechTimeRef.current = Date.now();
   };
 
   const endCall = () => {
@@ -230,6 +257,11 @@ const MEDDPICCCopilot = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
+  };
+
+  const markQuestionAsAsked = (question) => {
+    setAskedQuestions(prev => [...prev, question]);
+    setSuggestedQuestions(prev => prev.filter(q => q.question !== question));
   };
 
   const toggleMute = () => {
@@ -358,16 +390,22 @@ const MEDDPICCCopilot = () => {
 
           {/* Live Status */}
           {isCallActive && (
-            <div className="mt-4 flex items-center gap-3">
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                 <span className="text-sm font-bold">{useLiveMode ? 'LIVE - Listening' : 'DEMO MODE'}</span>
               </div>
               {isListening && useLiveMode && (
-                <div className="flex items-center gap-2 text-green-300">
-                  <Mic className="w-4 h-4 animate-pulse" />
-                  <span className="text-xs font-medium">Microphone Active</span>
-                </div>
+                <>
+                  <div className="flex items-center gap-2 text-green-300">
+                    <Mic className="w-4 h-4 animate-pulse" />
+                    <span className="text-xs font-medium">Microphone Active</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${speakerColors[(currentSpeaker - 1) % speakerColors.length]}`} />
+                    <span className="text-xs font-medium">Current: Speaker {currentSpeaker}</span>
+                  </div>
+                </>
               )}
               {isProcessing && (
                 <div className="flex items-center gap-2 text-blue-300">
@@ -443,20 +481,26 @@ const MEDDPICCCopilot = () => {
                   </h2>
                 </div>
                 <div className="p-4 h-96 overflow-y-auto space-y-3">
-                  {transcript.map((entry, idx) => (
-                    <div key={idx} className={`flex gap-3 ${entry.speaker === 'rep' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[80%] ${
-                        entry.speaker === 'rep' 
-                          ? 'bg-blue-500 text-white' 
-                          : 'bg-slate-100 text-slate-900'
-                      } px-4 py-3 rounded-lg`}>
-                        <div className="text-xs font-bold mb-1 opacity-75">
-                          {entry.speaker === 'rep' ? 'YOU' : 'PROSPECT'}
+                  {transcript.map((entry, idx) => {
+                    // Extract speaker number (e.g., "Speaker 1" -> 1)
+                    const speakerNum = entry.speaker.includes('Speaker') 
+                      ? parseInt(entry.speaker.split(' ')[1]) || 1
+                      : 1;
+                    
+                    // Assign color based on speaker number
+                    const colorClass = speakerColors[(speakerNum - 1) % speakerColors.length];
+                    
+                    return (
+                      <div key={idx} className="flex gap-3 justify-start">
+                        <div className={`max-w-[80%] ${colorClass} text-white px-4 py-3 rounded-lg shadow-md`}>
+                          <div className="text-xs font-bold mb-1 opacity-90">
+                            {entry.speaker.toUpperCase()}
+                          </div>
+                          <p className="text-sm leading-relaxed">{entry.text}</p>
                         </div>
-                        <p className="text-sm leading-relaxed">{entry.text}</p>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <div ref={transcriptEndRef} />
                 </div>
               </div>
@@ -464,13 +508,20 @@ const MEDDPICCCopilot = () => {
               {/* Suggested Questions */}
               {suggestedQuestions.length > 0 && (
                 <div className="bg-amber-50 border-2 border-amber-400 p-5 shadow-lg">
-                  <div className="flex items-center gap-2 mb-4">
-                    <AlertCircle className="w-6 h-6 text-amber-600" />
-                    <h3 className="font-black text-xl text-slate-900">Suggested Questions</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-6 h-6 text-amber-600" />
+                      <h3 className="font-black text-xl text-slate-900">Suggested Questions</h3>
+                    </div>
+                    <span className="text-xs text-slate-600">Click to mark as asked</span>
                   </div>
                   <div className="space-y-3">
-                    {suggestedQuestions.slice(0, 3).map((q, idx) => (
-                      <div key={idx} className="bg-white border-2 border-amber-400 p-4">
+                    {suggestedQuestions.map((q, idx) => (
+                      <div 
+                        key={idx} 
+                        onClick={() => markQuestionAsAsked(q.question)}
+                        className="bg-white border-2 border-amber-400 p-4 cursor-pointer hover:bg-amber-50 transition-colors"
+                      >
                         <div className="flex items-start gap-3">
                           <span className={`px-2 py-1 text-xs font-bold ${
                             q.priority === 'high' ? 'bg-red-500' : 
@@ -481,7 +532,7 @@ const MEDDPICCCopilot = () => {
                           </span>
                           <div className="flex-1">
                             <p className="text-sm font-medium text-slate-600 mb-1">
-                              {q.meddpicc_area.replace('_', ' ').toUpperCase()}
+                              {q.meddpicc_area.replace(/_/g, ' ').toUpperCase()}
                             </p>
                             <p className="font-bold text-slate-900 mb-2">{q.question}</p>
                             <p className="text-xs text-slate-600 italic">{q.why_now}</p>
@@ -554,21 +605,40 @@ const MEDDPICCCopilot = () => {
                     color="#f59e0b"
                   />
                   <MEDDPICCCard 
+                    title="Decision Criteria" 
+                    icon={CheckCircle2}
+                    data={meddpiccState.decision_criteria}
+                    color="#10b981"
+                  />
+                  <MEDDPICCCard 
                     title="Pain" 
                     icon={Target}
                     data={meddpiccState.pain}
                     color="#ef4444"
+                  />
+                  <MEDDPICCCard 
+                    title="Implications" 
+                    icon={AlertCircle}
+                    data={meddpiccState.implications}
+                    color="#f97316"
+                  />
+                  <MEDDPICCCard 
+                    title="Champion" 
+                    icon={Award}
+                    data={meddpiccState.champion}
+                    color="#06b6d4"
+                  />
+                  <MEDDPICCCard 
+                    title="Competition" 
+                    icon={ChevronRight}
+                    data={meddpiccState.competition}
+                    color="#6366f1"
                   />
                 </>
               )}
             </div>
           </div>
         )}
-      </div>
-
-      {/* Footer Note */}
-      <div className="fixed bottom-4 right-4 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-medium shadow-lg">
-        <p>🤖 Powered by Claude Sonnet 4</p>
       </div>
     </div>
   );

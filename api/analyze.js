@@ -26,11 +26,15 @@ Constraints (Non-Negotiable):
 - Be conservative. If something is unclear, mark it as "Weak/Unclear" or "Not Detected"
 - Optimize for minimal interruption: prompts must be brief and optional
 
-Focus only on these MEDDPICC elements:
+Focus on these MEDDPICC elements:
 - Metrics (measurable impact, targets, KPIs)
 - Economic Buyer (budget authority, decision maker)
 - Decision Process (steps, timeline, criteria)
+- Decision Criteria (what they're evaluating)
 - Pain (current problem + consequences)
+- Implications (what happens if they don't solve this)
+- Champion (internal advocate for your solution)
+- Competition (alternatives they're considering)
 
 Output Format: Return ONLY valid JSON with this structure:
 {
@@ -38,7 +42,11 @@ Output Format: Return ONLY valid JSON with this structure:
     "metrics": {"status": "detected|weak|not_detected", "evidence": [], "confidence": 0.0, "missing_info": []},
     "economic_buyer": {"status": "detected|weak|not_detected", "evidence": [], "confidence": 0.0, "missing_info": []},
     "decision_process": {"status": "detected|weak|not_detected", "evidence": [], "confidence": 0.0, "missing_info": []},
-    "pain": {"status": "detected|weak|not_detected", "evidence": [], "confidence": 0.0, "missing_info": []}
+    "decision_criteria": {"status": "detected|weak|not_detected", "evidence": [], "confidence": 0.0, "missing_info": []},
+    "pain": {"status": "detected|weak|not_detected", "evidence": [], "confidence": 0.0, "missing_info": []},
+    "implications": {"status": "detected|weak|not_detected", "evidence": [], "confidence": 0.0, "missing_info": []},
+    "champion": {"status": "detected|weak|not_detected", "evidence": [], "confidence": 0.0, "missing_info": []},
+    "competition": {"status": "detected|weak|not_detected", "evidence": [], "confidence": 0.0, "missing_info": []}
   },
   "suggested_questions": [{"meddpicc_area": "string", "priority": "high|medium|low", "question": "string", "why_now": "string"}],
   "intent_confidence": {"level": "low|medium|high", "reasoning": [], "deal_risk_flags": []},
@@ -54,21 +62,25 @@ Current Transcript:
 ${transcript.map(t => `${t.speaker.toUpperCase()}: ${t.text}`).join('\n')}
 
 Tasks:
-1. Update statuses for Metrics, Economic Buyer, Decision Process, Pain
+1. Update statuses for all MEDDPICC components
 2. Extract evidence from the transcript
 3. Identify what is missing/weak
-4. Suggest up to 3 questions max, highest impact first
+4. Suggest up to 5 questions max, highest impact first
 5. Output strict JSON only following the schema
 
 Scoring Guidelines:
 - Metrics: Detected if measurable impact/KPIs/timelines stated
 - Economic Buyer: Detected if budget authority/decision maker identified
 - Decision Process: Detected if steps/timeline/criteria described
+- Decision Criteria: Detected if evaluation factors or requirements mentioned
 - Pain: Detected if clear current problem + consequences described
+- Implications: Detected if consequences of inaction or urgency mentioned
+- Champion: Detected if internal advocate or enthusiastic supporter identified
+- Competition: Detected if alternatives, competitors, or current solutions mentioned
 
 Intent Confidence:
-- High: Pain + Decision Process detected AND (Metrics OR Economic Buyer detected)
-- Medium: Pain detected but Decision Process/Economic Buyer unclear
+- High: Pain + Implications detected AND (Metrics OR Economic Buyer detected) AND Decision Process clear
+- Medium: Pain detected with some process clarity but missing key elements
 - Low: Pain weak/not detected OR no Decision Process and unclear buyer`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
