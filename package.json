@@ -1,6 +1,7 @@
 {
   "name": "meddpicc-copilot",
   "version": "1.0.0",
+  "type": "module",
   "description": "Real-Time MEDDPICC Qualification Copilot for B2B SaaS Sales",
   "main": "index.js",
   "scripts": {
