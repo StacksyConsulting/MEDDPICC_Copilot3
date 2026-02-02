@@ -74,6 +74,7 @@ const MEDDPICCCopilot = () => {
 
     let activeSpeaker = 1; // Start with Speaker 1
     let lastSpeechTime = Date.now();
+    let lastSpeaker = 1; // Track the last speaker to alternate properly
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -98,9 +99,14 @@ const MEDDPICCCopilot = () => {
       const timeSinceLastSpeech = currentTime - lastSpeechTime;
       
       if (timeSinceLastSpeech > silenceThresholdMs && finalTranscript) {
-        // Silence detected - likely a different speaker
-        activeSpeaker = activeSpeaker >= 4 ? 1 : activeSpeaker + 1;
+        // Silence detected - switch to the other speaker
+        // If last speaker was 1, switch to 2, and vice versa
+        activeSpeaker = lastSpeaker === 1 ? 2 : 1;
+        lastSpeaker = activeSpeaker;
         setCurrentSpeaker(activeSpeaker);
+      } else if (finalTranscript) {
+        // No significant silence, same speaker continuing
+        activeSpeaker = lastSpeaker;
       }
 
       // When we get a final result, add it to transcript
