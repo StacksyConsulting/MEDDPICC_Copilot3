@@ -1,8 +1,8 @@
 {
-  "name": "meddpicc-copilot",
+  "name": "closepath",
   "version": "1.0.0",
   "type": "module",
-  "description": "Real-Time MEDDPICC Qualification Copilot for B2B SaaS Sales",
+  "description": "ClosePath - Real-Time Sales Qualification Intelligence",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
