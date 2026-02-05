@@ -126,9 +126,13 @@ const ClosePath = () => {
         setTranscript(prev => {
           const updated = [...prev, newEntry];
           
-          // COST OPTIMIZATION: Trigger analysis every 3 entries (was 2)
+          // SMART TRIGGERING: Analyze on keywords OR every 3 entries
+          const hasKeywords = /budget|decision|problem|pain|timeline|process|buyer|cost|\$/i.test(finalTranscript);
+          
           transcriptCountRef.current += 1;
-          if (transcriptCountRef.current % 3 === 0) {
+          
+          // Trigger immediately if important keywords detected, otherwise every 3 entries
+          if (hasKeywords || transcriptCountRef.current % 3 === 0) {
             analyzeTranscript(updated);
           }
           
@@ -210,6 +214,9 @@ const ClosePath = () => {
     setIsProcessing(true);
     setError(null);
 
+    // INSTANT FEEDBACK: Show "analyzing" pulse on tiles immediately
+    // This makes it feel responsive even while API processes
+    
     // COST OPTIMIZATION: Only send last 15 entries (keeps context manageable)
     const recentTranscript = currentTranscript.slice(-15);
 
@@ -430,7 +437,9 @@ const ClosePath = () => {
     const statusLabel = STATUS_LABELS[data.status];
 
     return (
-      <div className="bg-white border-2 border-slate-900 p-4 hover:shadow-lg transition-all duration-200">
+      <div className={`bg-white border-2 border-slate-900 p-4 hover:shadow-lg transition-all duration-200 ${
+        isProcessing ? 'animate-pulse' : ''
+      }`}>
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2">
             <Icon className="w-5 h-5" style={{ color }} />
