@@ -560,18 +560,6 @@ const ClosePath = () => {
               <strong> Demo Mode:</strong> Pre-recorded simulation
             </p>
             
-            <div className="flex justify-center mb-6">
-              <label className="flex items-center gap-2 text-lg cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useLiveMode}
-                  onChange={(e) => setUseLiveMode(e.target.checked)}
-                  className="w-5 h-5"
-                />
-                <span className="font-semibold">Use Live Mode (Microphone)</span>
-              </label>
-            </div>
-
             <button
               onClick={startCall}
               className="px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold text-lg transition-all flex items-center gap-3 mx-auto shadow-lg hover:shadow-xl"
