@@ -126,9 +126,9 @@ const ClosePath = () => {
         setTranscript(prev => {
           const updated = [...prev, newEntry];
           
-          // Trigger analysis every 2 entries
+          // COST OPTIMIZATION: Trigger analysis every 3 entries (was 2)
           transcriptCountRef.current += 1;
-          if (transcriptCountRef.current % 2 === 0) {
+          if (transcriptCountRef.current % 3 === 0) {
             analyzeTranscript(updated);
           }
           
@@ -193,8 +193,8 @@ const ClosePath = () => {
         setTranscript(prev => [...prev, newEntry]);
         setSimulationIndex(prev => prev + 1);
 
-        // Trigger AI analysis every 2-3 transcript entries
-        if (simulationIndex % 2 === 1) {
+        // COST OPTIMIZATION: Trigger AI analysis every 3 transcript entries
+        if (simulationIndex % 3 === 0) {
           analyzeTranscript([...transcript, newEntry]);
         }
       } else {
@@ -210,6 +210,9 @@ const ClosePath = () => {
     setIsProcessing(true);
     setError(null);
 
+    // COST OPTIMIZATION: Only send last 15 entries (keeps context manageable)
+    const recentTranscript = currentTranscript.slice(-15);
+
     try {
       const response = await fetch("/api/analyze", {
         method: "POST",
@@ -217,7 +220,7 @@ const ClosePath = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          transcript: currentTranscript,
+          transcript: recentTranscript,
           callId: callId
         })
       });
