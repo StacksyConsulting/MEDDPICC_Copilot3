@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Phone, PhoneOff, AlertCircle, CheckCircle2, Circle, ChevronRight, Zap, TrendingUp, Users, Clock, Target, Award } from 'lucide-react';
+import { Mic, MicOff, Phone, PhoneOff, AlertCircle, CheckCircle2, Circle, ChevronRight, Zap, TrendingUp, Users, Clock, Target, Award, Download } from 'lucide-react';
 
 // MEDDPICC Component Status Colors
 const STATUS_COLORS = {
@@ -43,6 +43,7 @@ const ClosePath = () => {
   const [isListening, setIsListening] = useState(false);
   const [askedQuestions, setAskedQuestions] = useState([]); // Track asked questions
   const [currentSpeaker, setCurrentSpeaker] = useState(1); // Track current speaker number
+  const [showExportMenu, setShowExportMenu] = useState(false); // Export dropdown toggle
   const [speakerColors] = useState(['bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-orange-500']); // Colors for up to 4 speakers
   const recognitionRef = useRef(null);
   const transcriptContainerRef = useRef(null);
@@ -430,6 +431,307 @@ const ClosePath = () => {
     setIsMuted(!isMuted);
   };
 
+  // EXPORT FUNCTIONS
+  const exportToPDF = () => {
+    const content = generateExportContent();
+    const blob = new Blob([content.html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `closepath-call-analysis-${new Date().toISOString().split('T')[0]}.html`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportToNotion = () => {
+    const content = generateExportContent();
+    navigator.clipboard.writeText(content.markdown);
+    alert('✓ Copied to clipboard! Paste into Notion.');
+  };
+
+  const exportToAppleNotes = () => {
+    const content = generateExportContent();
+    const blob = new Blob([content.markdown], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `closepath-call-${new Date().toISOString().split('T')[0]}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const generateExportContent = () => {
+    const date = new Date().toLocaleDateString();
+    const time = new Date().toLocaleTimeString();
+    
+    // Markdown format (for Notion, Apple Notes, OneNote)
+    let markdown = `# ClosePath Call Analysis\n`;
+    markdown += `**Date:** ${date} ${time}\n\n`;
+    
+    // Intent Score
+    markdown += `## 🎯 Intent Confidence: ${intentScore?.level?.toUpperCase() || 'N/A'}\n\n`;
+    if (intentScore?.reasoning) {
+      markdown += `**Reasoning:**\n`;
+      intentScore.reasoning.forEach(r => markdown += `- ${r}\n`);
+      markdown += `\n`;
+    }
+    if (intentScore?.deal_risk_flags && intentScore.deal_risk_flags.length > 0) {
+      markdown += `**⚠️ Risk Flags:**\n`;
+      intentScore.deal_risk_flags.forEach(r => markdown += `- ${r}\n`);
+      markdown += `\n`;
+    }
+
+    // MEDDPICC
+    markdown += `## 📊 MEDDPICC Scorecard\n\n`;
+    if (meddpiccState) {
+      const sections = [
+        { key: 'metrics', title: 'Metrics' },
+        { key: 'economic_buyer', title: 'Economic Buyer' },
+        { key: 'decision_process', title: 'Decision Process' },
+        { key: 'decision_criteria', title: 'Decision Criteria' },
+        { key: 'pain', title: 'Pain' },
+        { key: 'implications', title: 'Implications' },
+        { key: 'champion', title: 'Champion' },
+        { key: 'competition', title: 'Competition' }
+      ];
+
+      sections.forEach(({ key, title }) => {
+        const data = meddpiccState[key];
+        if (data) {
+          markdown += `### ${title}\n`;
+          markdown += `**Status:** ${STATUS_LABELS[data.status]} (${Math.round(data.confidence * 100)}% confidence)\n\n`;
+          
+          if (data.evidence && data.evidence.length > 0) {
+            markdown += `**Evidence:**\n`;
+            data.evidence.forEach(e => markdown += `- "${e}"\n`);
+            markdown += `\n`;
+          }
+          
+          if (data.missing_info && data.missing_info.length > 0) {
+            markdown += `**Missing:**\n`;
+            data.missing_info.forEach(m => markdown += `- ${m}\n`);
+            markdown += `\n`;
+          }
+        }
+      });
+    }
+
+    // Suggested Questions
+    if (suggestedQuestions && suggestedQuestions.length > 0) {
+      markdown += `## ❓ Suggested Questions\n\n`;
+      suggestedQuestions.forEach(q => {
+        markdown += `### ${q.question}\n`;
+        markdown += `- **Priority:** ${q.priority.toUpperCase()}\n`;
+        markdown += `- **Area:** ${q.meddpicc_area.replace(/_/g, ' ')}\n`;
+        markdown += `- **Why now:** ${q.why_now}\n\n`;
+      });
+    }
+
+    // HTML format with VISUAL TILES
+    const intentLevel = intentScore?.level || 'low';
+    const intentColor = intentLevel === 'high' ? '#10b981' : intentLevel === 'medium' ? '#f59e0b' : '#ef4444';
+    const intentBg = intentLevel === 'high' ? '#d1fae5' : intentLevel === 'medium' ? '#fef3c7' : '#fee2e2';
+    
+    let meddpiccTilesHtml = '';
+    if (meddpiccState) {
+      const sections = [
+        { key: 'metrics', title: 'Metrics', color: '#3b82f6' },
+        { key: 'economic_buyer', title: 'Economic Buyer', color: '#8b5cf6' },
+        { key: 'decision_process', title: 'Decision Process', color: '#f59e0b' },
+        { key: 'decision_criteria', title: 'Decision Criteria', color: '#10b981' },
+        { key: 'pain', title: 'Pain', color: '#ef4444' },
+        { key: 'implications', title: 'Implications', color: '#f97316' },
+        { key: 'champion', title: 'Champion', color: '#06b6d4' },
+        { key: 'competition', title: 'Competition', color: '#6366f1' }
+      ];
+
+      sections.forEach(({ key, title, color }) => {
+        const data = meddpiccState[key];
+        if (data) {
+          const statusColor = data.status === 'detected' ? '#10b981' : data.status === 'weak' ? '#f59e0b' : '#cbd5e1';
+          const statusLabel = STATUS_LABELS[data.status];
+          
+          meddpiccTilesHtml += `
+            <div style="background: white; border: 2px solid #1e293b; padding: 16px; margin-bottom: 16px; page-break-inside: avoid;">
+              <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 18px; font-weight: bold; color: ${color};">${title}</h3>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="background: ${statusColor}; color: white; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: bold;">${statusLabel}</span>
+                  <span style="font-size: 12px; font-weight: 600; color: #64748b;">${Math.round(data.confidence * 100)}%</span>
+                </div>
+              </div>
+              
+              ${data.evidence && data.evidence.length > 0 ? `
+                <div style="margin-bottom: 12px;">
+                  <p style="font-size: 11px; font-weight: bold; color: #64748b; margin: 0 0 6px 0;">EVIDENCE:</p>
+                  ${data.evidence.map(e => `<p style="font-size: 13px; color: #1e293b; margin: 4px 0; padding: 8px; background: #f8fafc; border-radius: 4px;">"${e}"</p>`).join('')}
+                </div>
+              ` : ''}
+              
+              ${data.missing_info && data.missing_info.length > 0 ? `
+                <div>
+                  <p style="font-size: 11px; font-weight: bold; color: #64748b; margin: 0 0 6px 0;">MISSING INFO:</p>
+                  ${data.missing_info.map(m => `<p style="font-size: 13px; color: #64748b; margin: 4px 0;">• ${m}</p>`).join('')}
+                </div>
+              ` : ''}
+              
+              <div style="margin-top: 12px;">
+                <div style="background: #e2e8f0; height: 6px; border-radius: 3px; overflow: hidden;">
+                  <div style="background: ${statusColor}; height: 100%; width: ${Math.round(data.confidence * 100)}%; transition: width 0.3s;"></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      });
+    }
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ClosePath Call Analysis - ${date}</title>
+  <style>
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+      max-width: 900px; 
+      margin: 40px auto; 
+      padding: 20px;
+      background: #f8fafc;
+    }
+    .header {
+      background: linear-gradient(135deg, #1e293b 0%, #1e3a5f 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+    }
+    h1 { 
+      margin: 0 0 10px 0; 
+      font-size: 32px;
+      font-weight: 900;
+    }
+    .date {
+      color: #93c5fd;
+      font-size: 14px;
+    }
+    h2 { 
+      color: #1e293b; 
+      margin-top: 40px; 
+      margin-bottom: 20px;
+      font-size: 24px;
+      font-weight: 800;
+      border-bottom: 3px solid #3b82f6; 
+      padding-bottom: 10px; 
+    }
+    .intent-card {
+      background: ${intentBg};
+      border: 3px solid ${intentColor};
+      padding: 24px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+      page-break-inside: avoid;
+    }
+    .intent-level {
+      display: inline-block;
+      background: ${intentColor};
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 24px;
+      font-weight: 900;
+      margin-bottom: 16px;
+    }
+    .meddpicc-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+    @media print {
+      .meddpicc-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .question {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 16px;
+      margin-bottom: 16px;
+      border-radius: 4px;
+      page-break-inside: avoid;
+    }
+    .question h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: #1e293b;
+    }
+    .priority-high { color: #ef4444; font-weight: 700; }
+    .priority-medium { color: #f59e0b; font-weight: 700; }
+    .priority-low { color: #64748b; font-weight: 700; }
+    .transcript-entry {
+      padding: 12px;
+      margin: 8px 0;
+      background: white;
+      border-radius: 4px;
+      border-left: 3px solid #3b82f6;
+    }
+    .speaker {
+      font-weight: 700;
+      color: #3b82f6;
+      margin-right: 8px;
+    }
+    @media print {
+      body { background: white; }
+      .header { background: #1e293b !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>ClosePath Call Analysis</h1>
+    <div class="date">${date} at ${time}</div>
+  </div>
+
+  <h2>🎯 Intent Confidence</h2>
+  <div class="intent-card">
+    <div class="intent-level">${intentScore?.level?.toUpperCase() || 'N/A'}</div>
+    ${intentScore?.reasoning ? `
+      <div style="margin-top: 16px;">
+        <p style="font-weight: 700; margin: 0 0 8px 0;">Reasoning:</p>
+        ${intentScore.reasoning.map(r => `<p style="margin: 4px 0;">• ${r}</p>`).join('')}
+      </div>
+    ` : ''}
+    ${intentScore?.deal_risk_flags && intentScore.deal_risk_flags.length > 0 ? `
+      <div style="margin-top: 16px;">
+        <p style="font-weight: 700; margin: 0 0 8px 0; color: #ef4444;">⚠️ Risk Flags:</p>
+        ${intentScore.deal_risk_flags.map(r => `<p style="margin: 4px 0; color: #991b1b;">• ${r}</p>`).join('')}
+      </div>
+    ` : ''}
+  </div>
+
+  <h2>📊 MEDDPICC Scorecard</h2>
+  <div class="meddpicc-grid">
+    ${meddpiccTilesHtml}
+  </div>
+
+  ${suggestedQuestions && suggestedQuestions.length > 0 ? `
+    <h2>❓ Suggested Questions</h2>
+    ${suggestedQuestions.map(q => `
+      <div class="question">
+        <h3>${q.question}</h3>
+        <p style="margin: 4px 0;"><span class="priority-${q.priority}">${q.priority.toUpperCase()}</span> • ${q.meddpicc_area.replace(/_/g, ' ')}</p>
+        <p style="margin: 8px 0 0 0; font-size: 13px; color: #64748b;">${q.why_now}</p>
+      </div>
+    `).join('')}
+  ` : ''}
+</body>
+</html>`;
+
+    return { markdown, html };
+  };
+
   const MEDDPICCCard = ({ title, icon: Icon, data, color }) => {
     if (!data) return null;
 
@@ -549,6 +851,50 @@ const ClosePath = () => {
                   </>
                 )}
               </button>
+
+              {/* Export Dropdown - Show white box when call is complete and has data */}
+              {!isCallActive && meddpiccState && (
+                <div className="w-64 bg-white rounded-lg shadow-xl border-2 border-slate-200">
+                  <div className="py-2">
+                    <div className="px-4 py-2 border-b border-slate-200">
+                      <p className="text-xs font-bold text-slate-600 uppercase">Export Call Analysis</p>
+                    </div>
+                    
+                    <button
+                      onClick={() => { exportToNotion(); }}
+                      className="w-full px-4 py-3 text-left hover:bg-slate-100 transition-colors flex items-center gap-3"
+                    >
+                      <span className="text-2xl">📝</span>
+                      <div>
+                        <div className="font-bold text-slate-900">Notion</div>
+                        <div className="text-xs text-slate-600">Copy to clipboard</div>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => { exportToPDF(); }}
+                      className="w-full px-4 py-3 text-left hover:bg-slate-100 transition-colors flex items-center gap-3"
+                    >
+                      <span className="text-2xl">📄</span>
+                      <div>
+                        <div className="font-bold text-slate-900">PDF/HTML</div>
+                        <div className="text-xs text-slate-600">Visual report</div>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => { exportToAppleNotes(); }}
+                      className="w-full px-4 py-3 text-left hover:bg-slate-100 transition-colors flex items-center gap-3"
+                    >
+                      <span className="text-2xl">🍎</span>
+                      <div>
+                        <div className="font-bold text-slate-900">Notes / OneNote</div>
+                        <div className="text-xs text-slate-600">Plain text format</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
