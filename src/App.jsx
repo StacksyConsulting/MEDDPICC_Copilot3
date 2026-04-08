@@ -229,18 +229,14 @@ const ClosePath = () => {
   const analyzeTranscript = async (currentTranscript) => {
     setIsProcessing(true);
     setError(null);
-
     const recentTranscript = currentTranscript.slice(-15);
-
     try {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript: recentTranscript, callId, stream: false })
       });
-
       if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-
       const result = await response.json();
       if (result.meddpicc) setMeddpiccState(result.meddpicc);
       if (result.suggested_questions) {
@@ -249,7 +245,6 @@ const ClosePath = () => {
         );
       }
       if (result.intent_confidence) setIntentScore(result.intent_confidence);
-
     } catch (error) {
       console.error('Analysis error:', error);
       setError('Analysis failed - check API setup');
@@ -924,7 +919,7 @@ const ClosePath = () => {
               <Phone className="w-16 h-16 text-white" />
             </div>
             <h2 className="text-4xl font-black text-slate-900 mb-4">Ready to Qualify Smarter</h2>
-            <p className="text-xl text-slate-600 mb-10 max-w-2xl mx-auto">
+            <p className="text-xl text-slate-600 max-w-2xl mx-auto" style={{ marginBottom: '48px' }}>
               Real-time MEDDPICC qualification powered by AI.
               Get instant insights on prospect intent and suggested questions during your calls.
             </p>
