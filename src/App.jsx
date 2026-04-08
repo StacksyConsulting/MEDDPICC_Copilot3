@@ -214,8 +214,6 @@ const ClosePath = () => {
         const updatedTranscript = [...transcript, newEntry];
         setTranscript(updatedTranscript);
         setSimulationIndex(prev => prev + 1);
-
-        // Demo mode: use mock analysis directly, no API call needed
         const mockResult = generateMockAnalysis(updatedTranscript);
         setMeddpiccState(mockResult.meddpicc);
         setSuggestedQuestions(mockResult.suggested_questions);
@@ -238,25 +236,16 @@ const ClosePath = () => {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript: recentTranscript,
-          callId: callId,
-          stream: false
-        })
+        body: JSON.stringify({ transcript: recentTranscript, callId, stream: false })
       });
 
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`API request failed: ${response.status}`);
 
       const result = await response.json();
-
       if (result.meddpicc) setMeddpiccState(result.meddpicc);
       if (result.suggested_questions) {
         setSuggestedQuestions(
-          result.suggested_questions
-            .filter(q => !askedQuestions.includes(q.question))
-            .slice(0, 5)
+          result.suggested_questions.filter(q => !askedQuestions.includes(q.question)).slice(0, 5)
         );
       }
       if (result.intent_confidence) setIntentScore(result.intent_confidence);
@@ -940,26 +929,28 @@ const ClosePath = () => {
               Get instant insights on prospect intent and suggested questions during your calls.
             </p>
 
-            <div className="inline-flex items-start justify-center gap-4">
-              <div className="flex flex-col items-center gap-2">
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                 <button
                   onClick={() => { setUseLiveMode(false); startCall(); }}
-                  className="px-6 py-4 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-base transition-all flex items-center gap-2 shadow-lg hover:shadow-xl whitespace-nowrap"
+                  className="px-6 py-4 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-base transition-all shadow-lg hover:shadow-xl"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
                 >
-                  <Phone className="w-5 h-5 shrink-0" />
+                  <Phone className="w-5 h-5" />
                   Try Demo Call
                 </button>
                 <p className="text-xs text-slate-500">Pre-recorded, no mic needed</p>
               </div>
 
-              <span className="text-slate-400 font-bold text-sm pt-4">or</span>
+              <span className="text-slate-400 font-bold text-sm" style={{ paddingTop: '18px' }}>or</span>
 
-              <div className="flex flex-col items-center gap-2">
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                 <button
                   onClick={() => { setUseLiveMode(true); startCall(); }}
-                  className="px-6 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold text-base transition-all flex items-center gap-2 shadow-lg hover:shadow-xl whitespace-nowrap"
+                  className="px-6 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold text-base transition-all shadow-lg hover:shadow-xl"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
                 >
-                  <Mic className="w-5 h-5 shrink-0" />
+                  <Mic className="w-5 h-5" />
                   Start Live Call
                 </button>
                 <p className="text-xs text-slate-500">Uses your microphone</p>
