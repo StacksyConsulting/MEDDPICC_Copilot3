@@ -50,6 +50,9 @@ const ClosePath = () => {
   const transcriptCountRef = useRef(0);
   const lastSpeechTimeRef = useRef(Date.now());
   const silenceThresholdMs = 2000; // 2 seconds of silence = new speaker
+  const pauseThresholdMs = 800; // 800ms pause = trigger analysis (natural conversational break)
+  const minAnalysisIntervalMs = 3000; // Minimum 3 seconds between analyses (prevent spam)
+  const lastAnalysisTimeRef = useRef(0);
 
   // Auto-scroll transcript container only — scoped to that element, won't affect the page
   useEffect(() => {
@@ -58,6 +61,26 @@ const ClosePath = () => {
       container.scrollTop = container.scrollHeight;
     }
   }, [transcript]);
+
+  // PAUSE DETECTION: Trigger analysis after natural pauses (with debouncing)
+  useEffect(() => {
+    if (!isCallActive || transcript.length === 0) return;
+
+    const pauseTimer = setTimeout(() => {
+      const timeSinceLastSpeech = Date.now() - lastSpeechTimeRef.current;
+      const timeSinceLastAnalysis = Date.now() - lastAnalysisTimeRef.current;
+      
+      // Only analyze if:
+      // 1. There's been a pause (natural break)
+      // 2. Enough time has passed since last analysis (debounce)
+      if (timeSinceLastSpeech >= pauseThresholdMs && timeSinceLastAnalysis >= minAnalysisIntervalMs) {
+        lastAnalysisTimeRef.current = Date.now();
+        analyzeTranscript(transcript);
+      }
+    }, pauseThresholdMs);
+
+    return () => clearTimeout(pauseTimer);
+  }, [transcript, isCallActive]);
 
   // Initialize Web Speech API for live transcription
   useEffect(() => {
@@ -127,15 +150,8 @@ const ClosePath = () => {
         setTranscript(prev => {
           const updated = [...prev, newEntry];
           
-          // SMART TRIGGERING: Analyze on keywords OR every 3 entries
-          const hasKeywords = /budget|decision|problem|pain|timeline|process|buyer|cost|\$/i.test(finalTranscript);
-          
-          transcriptCountRef.current += 1;
-          
-          // Trigger immediately if important keywords detected, otherwise every 3 entries
-          if (hasKeywords || transcriptCountRef.current % 3 === 0) {
-            analyzeTranscript(updated);
-          }
+          // Pause detection will handle analysis triggering
+          // No need for entry count or keyword detection here anymore
           
           return updated;
         });
@@ -188,90 +204,66 @@ const ClosePath = () => {
     };
   }, [isCallActive, useLiveMode]);
 
-  // Demo mode simulation (kept for testing)
+  // Demo mode simulation
   useEffect(() => {
     if (useLiveMode || !isCallActive) return;
 
     const interval = setInterval(() => {
       if (simulationIndex < DEMO_TRANSCRIPT.length) {
         const newEntry = DEMO_TRANSCRIPT[simulationIndex];
-        setTranscript(prev => [...prev, newEntry]);
+        const updatedTranscript = [...transcript, newEntry];
+        setTranscript(updatedTranscript);
         setSimulationIndex(prev => prev + 1);
 
-        // COST OPTIMIZATION: Trigger AI analysis every 3 transcript entries
-        if (simulationIndex % 3 === 0) {
-          analyzeTranscript([...transcript, newEntry]);
-        }
+        // In demo mode, always use mock analysis immediately (no API needed)
+        const mockResult = generateMockAnalysis(updatedTranscript);
+        setMeddpiccState(mockResult.meddpicc);
+        setSuggestedQuestions(mockResult.suggested_questions);
+        setIntentScore(mockResult.intent_confidence);
       } else {
-        // End of demo transcript
         setIsCallActive(false);
       }
-    }, 4000);
+    }, 2500);
 
     return () => clearInterval(interval);
-  }, [isCallActive, simulationIndex, useLiveMode]);
+  }, [isCallActive, simulationIndex, useLiveMode, transcript]);
 
   const analyzeTranscript = async (currentTranscript) => {
     setIsProcessing(true);
     setError(null);
 
-    // INSTANT FEEDBACK: Show "analyzing" pulse on tiles immediately
-    // This makes it feel responsive even while API processes
-    
-    // COST OPTIMIZATION: Only send last 15 entries (keeps context manageable)
     const recentTranscript = currentTranscript.slice(-15);
 
     try {
       const response = await fetch("/api/analyze", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transcript: recentTranscript,
-          callId: callId
+          callId: callId,
+          stream: false
         })
       });
 
       if (!response.ok) {
-        // If running in demo mode and API fails, use mock data
-        if (!useLiveMode) {
-          console.log('Using mock data for demo mode');
-          const mockResult = generateMockAnalysis(currentTranscript);
-          setMeddpiccState(mockResult.meddpicc);
-          setSuggestedQuestions(mockResult.suggested_questions.slice(0, 5));
-          setIntentScore(mockResult.intent_confidence);
-          setIsProcessing(false);
-          return;
-        }
         throw new Error(`API request failed: ${response.status}`);
       }
 
       const result = await response.json();
 
-      setMeddpiccState(result.meddpicc);
-      
-      // Filter out questions that have been asked, then cap at 5
-      const newQuestions = (result.suggested_questions || [])
-        .filter(q => !askedQuestions.includes(q.question))
-        .slice(0, 5);
-      
-      setSuggestedQuestions(newQuestions);
-      setIntentScore(result.intent_confidence);
+      if (result.meddpicc) setMeddpiccState(result.meddpicc);
+      if (result.suggested_questions) {
+        setSuggestedQuestions(
+          result.suggested_questions
+            .filter(q => !askedQuestions.includes(q.question))
+            .slice(0, 5)
+        );
+      }
+      if (result.intent_confidence) setIntentScore(result.intent_confidence);
 
     } catch (error) {
       console.error('Analysis error:', error);
-      
-      // If in demo mode, use mock data instead of showing error
-      if (!useLiveMode) {
-        console.log('API failed, using mock data for demo');
-        const mockResult = generateMockAnalysis(currentTranscript);
-        setMeddpiccState(mockResult.meddpicc);
-        setSuggestedQuestions(mockResult.suggested_questions.slice(0, 5));
-        setIntentScore(mockResult.intent_confidence);
-      } else {
-        setError('Analysis failed - check API setup');
-      }
+      setError('Analysis failed - check API setup');
     } finally {
       setIsProcessing(false);
     }
@@ -806,18 +798,6 @@ const ClosePath = () => {
 
             {/* Call Controls */}
             <div className="flex items-center gap-3">
-              {!isCallActive && (
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={useLiveMode}
-                    onChange={(e) => setUseLiveMode(e.target.checked)}
-                    className="w-4 h-4"
-                  />
-                  <span>Live Mode (Microphone)</span>
-                </label>
-              )}
-
               {isCallActive && (
                 <button
                   onClick={toggleMute}
@@ -847,7 +827,7 @@ const ClosePath = () => {
                 ) : (
                   <>
                     <Phone className="w-5 h-5" />
-                    {useLiveMode ? 'Start Live Call' : 'Start Demo Call'}
+                    {useLiveMode ? 'Start Live Call' : 'Start Demo'}
                   </>
                 )}
               </button>
@@ -943,28 +923,36 @@ const ClosePath = () => {
               <Phone className="w-16 h-16 text-white" />
             </div>
             <h2 className="text-4xl font-black text-slate-900 mb-4">Ready to Qualify Smarter</h2>
-            <p className="text-xl text-slate-600 mb-4 max-w-2xl mx-auto">
-              Real-time MEDDPICC qualification powered by AI. 
-              Get instant insights on prospect intent and receive suggested questions during your calls.
+            <p className="text-xl text-slate-600 mb-10 max-w-2xl mx-auto">
+              Real-time MEDDPICC qualification powered by AI.
+              Get instant insights on prospect intent and suggested questions during your calls.
             </p>
-            <p className="text-sm text-slate-500 mb-8">
-              <strong>Live Mode:</strong> Uses your microphone for real calls • 
-              <strong> Demo Mode:</strong> Pre-recorded simulation
-            </p>
-            
-            <button
-              onClick={startCall}
-              className="px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold text-lg transition-all flex items-center gap-3 mx-auto shadow-lg hover:shadow-xl"
-            >
-              <Phone className="w-6 h-6" />
-              {useLiveMode ? 'Start Live Call' : 'Start Demo Call'}
-            </button>
-            
-            {useLiveMode && (
-              <p className="text-xs text-slate-500 mt-4 text-center">
-                Your browser will request microphone permission
-              </p>
-            )}
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  onClick={() => { setUseLiveMode(false); startCall(); }}
+                  className="px-8 py-4 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-lg transition-all flex items-center gap-3 shadow-lg hover:shadow-xl"
+                >
+                  <Phone className="w-6 h-6" />
+                  Try Demo Call
+                </button>
+                <p className="text-xs text-slate-500">Pre-recorded simulation, no mic needed</p>
+              </div>
+
+              <div className="text-slate-400 font-bold text-sm">or</div>
+
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  onClick={() => { setUseLiveMode(true); startCall(); }}
+                  className="px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold text-lg transition-all flex items-center gap-3 shadow-lg hover:shadow-xl"
+                >
+                  <Mic className="w-6 h-6" />
+                  Start Live Call
+                </button>
+                <p className="text-xs text-slate-500">Uses your microphone for real calls</p>
+              </div>
+            </div>
           </div>
         ) : (
           <div>
