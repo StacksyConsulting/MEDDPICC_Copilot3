@@ -215,7 +215,7 @@ const ClosePath = () => {
         setTranscript(updatedTranscript);
         setSimulationIndex(prev => prev + 1);
 
-        // In demo mode, always use mock analysis immediately (no API needed)
+        // Demo mode: use mock analysis directly, no API call needed
         const mockResult = generateMockAnalysis(updatedTranscript);
         setMeddpiccState(mockResult.meddpicc);
         setSuggestedQuestions(mockResult.suggested_questions);
@@ -798,6 +798,18 @@ const ClosePath = () => {
 
             {/* Call Controls */}
             <div className="flex items-center gap-3">
+              {!isCallActive && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={useLiveMode}
+                    onChange={(e) => setUseLiveMode(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span>Live Mode (Microphone)</span>
+                </label>
+              )}
+
               {isCallActive && (
                 <button
                   onClick={toggleMute}
@@ -827,7 +839,7 @@ const ClosePath = () => {
                 ) : (
                   <>
                     <Phone className="w-5 h-5" />
-                    {useLiveMode ? 'Start Live Call' : 'Start Demo'}
+                    {useLiveMode ? 'Start Live Call' : 'Start Demo Call'}
                   </>
                 )}
               </button>
@@ -928,29 +940,29 @@ const ClosePath = () => {
               Get instant insights on prospect intent and suggested questions during your calls.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="inline-flex items-start justify-center gap-4">
               <div className="flex flex-col items-center gap-2">
                 <button
                   onClick={() => { setUseLiveMode(false); startCall(); }}
-                  className="px-8 py-4 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-lg transition-all flex items-center gap-3 shadow-lg hover:shadow-xl"
+                  className="px-6 py-4 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-base transition-all flex items-center gap-2 shadow-lg hover:shadow-xl whitespace-nowrap"
                 >
-                  <Phone className="w-6 h-6" />
+                  <Phone className="w-5 h-5 shrink-0" />
                   Try Demo Call
                 </button>
-                <p className="text-xs text-slate-500">Pre-recorded simulation, no mic needed</p>
+                <p className="text-xs text-slate-500">Pre-recorded, no mic needed</p>
               </div>
 
-              <div className="text-slate-400 font-bold text-sm">or</div>
+              <span className="text-slate-400 font-bold text-sm pt-4">or</span>
 
               <div className="flex flex-col items-center gap-2">
                 <button
                   onClick={() => { setUseLiveMode(true); startCall(); }}
-                  className="px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold text-lg transition-all flex items-center gap-3 shadow-lg hover:shadow-xl"
+                  className="px-6 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold text-base transition-all flex items-center gap-2 shadow-lg hover:shadow-xl whitespace-nowrap"
                 >
-                  <Mic className="w-6 h-6" />
+                  <Mic className="w-5 h-5 shrink-0" />
                   Start Live Call
                 </button>
-                <p className="text-xs text-slate-500">Uses your microphone for real calls</p>
+                <p className="text-xs text-slate-500">Uses your microphone</p>
               </div>
             </div>
           </div>
